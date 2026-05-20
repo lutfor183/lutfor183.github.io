@@ -295,7 +295,7 @@ document.addEventListener('DOMContentLoaded', function() {
             <div class="a4-page template${templateId}">
                 <img src="img/du.png" class="cover-logo" alt="University of Dhaka Logo">
                 <div style="flex-grow: 1; display: flex; flex-direction: column; justify-content: center;">
-                    <h2 class="cover-course-name">${title}</h2>
+                    <div class="cover-title">${title}</div>
                     <p class="cover-course-code">Course Name: ${courseName}</p>
                     <p class="cover-course-code">Course Code: ${courseCode}</p>
                 </div>
