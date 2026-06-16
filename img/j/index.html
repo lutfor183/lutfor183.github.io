@@ -22,13 +22,30 @@ h1{ text-align:center; }
 #search { flex-grow: 1; min-width: 200px; }
 .date-loader { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; background: #e2e8f0; padding: 15px; border-radius: 8px; width: 100%; box-sizing: border-box; margin-bottom: 20px;}
 
-.post{ background:white; margin:12px 0; padding:16px; border-radius:12px; cursor:pointer; box-shadow:0 1px 4px rgba(0,0,0,.08); transition: transform 0.2s;}
+.post{ background:white; margin:12px 0; padding:16px; border-radius:12px; cursor:pointer; box-shadow:0 1px 4px rgba(0,0,0,.08); transition: transform 0.2s; position: relative;}
 .post:hover{ transform:translateY(-2px); }
 .badge{ display:inline-block; padding:4px 10px; border-radius:20px; font-size:12px; font-weight:bold; background:#2563eb; color:white; margin-bottom:8px; }
 .date{ color:#666; font-size:13px; margin-top:6px; }
 .tags{ margin-top:10px; }
 .tag{ display:inline-block; padding:3px 8px; margin:2px; border-radius:20px; background:#eee; font-size:12px; }
 .loading{ text-align:center; padding: 20px; font-weight: bold; color: #666; }
+
+/* --- Secret Apply Button UI --- */
+.apply-btn {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    background: #10b981;
+    color: white;
+    border: none;
+    padding: 6px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: bold;
+    font-size: 13px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+.apply-btn:active { transform: scale(0.95); }
 </style>
 </head>
 <body>
@@ -45,7 +62,7 @@ h1{ text-align:center; }
     <h1>Job Circular</h1>
 
     <div class="controls">
-        <input id="search" placeholder="Search jobs...">
+        <input id="search" placeholder="Search jobs... (type 's.it' for magic)" autocomplete="off">
         
         <select id="categoryFilter">
             <option value="">All Categories</option>
@@ -67,42 +84,92 @@ h1{ text-align:center; }
 
 <script>
 // ==========================================
-// 1. SECURITY / ENCRYPTION SYSTEM
+// 1. SECURITY / LOGIN
 // ==========================================
+const TARGET_PASS = "ODg4MA=="; // Base64 encoding for "8880"
 
-const TARGET_HASH = "64915d049757c06befce3d2d7f11992e68516b61fe2097f8d0eb4e373598ea4a"; 
-
-// Cryptographic hash function
-async function hashPassword(password) {
-    const msgBuffer = new TextEncoder().encode(password);
-    const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
-    const hashArray = Array.from(new Uint8Array(hashBuffer));
-    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-}
-
-// Handle Login attempt
-async function attemptLogin() {
+function attemptLogin() {
     const input = document.getElementById("pass-input").value;
-    const hash = await hashPassword(input);
-    
-    if(hash === TARGET_HASH) {
+    if(btoa(input) === TARGET_PASS) {
         document.getElementById("login-screen").style.display = "none";
         document.getElementById("app-content").style.display = "block";
-        // Start the observer to load the first batch only AFTER login
         observer.observe(document.getElementById("loading-indicator"));
     } else {
         document.getElementById("login-error").style.display = "block";
     }
 }
 
-// Allow pressing 'Enter' on keyboard to login
 document.getElementById("pass-input").addEventListener("keypress", function(event) {
   if (event.key === "Enter") attemptLogin();
 });
 
 
 // ==========================================
-// 2. APP LOGIC & AUTO-LOAD SYSTEM
+// 2. SECRET APPLY SYSTEM & API
+// ==========================================
+let showApplyMode = false;
+
+// PASTE YOUR KEY HERE
+const WEB3FORMS_ACCESS_KEY = "267ced48-e062-48e5-8c32-adfc8584d25a"; 
+
+async function triggerEmail(event, title, link, postElement, jobId) {
+    event.stopPropagation(); 
+    if(localStorage.getItem('saved_' + jobId)) return;
+
+    const btn = postElement.querySelector('.apply-btn');
+    const h3 = postElement.querySelector('h3');
+    
+    if(WEB3FORMS_ACCESS_KEY === "YOUR_WEB3FORMS_ACCESS_KEY_HERE") {
+        alert("Please paste your Web3Forms Access Key into the code!");
+        return;
+    }
+
+    btn.innerText = "Sending...";
+    btn.style.background = "#eab308"; 
+
+    try {
+        const response = await fetch("https://api.web3forms.com/submit", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                Accept: "application/json",
+            },
+            body: JSON.stringify({
+                access_key: WEB3FORMS_ACCESS_KEY,
+                subject: "Saved Job: " + title,
+                from_name: "My Job Portal",
+                message: "Job Title: " + title + "\n\nDirect Link: " + link + "\n\n(Saved from your portal app)"
+            }),
+        });
+
+        const result = await response.json(); // Read the exact response from the server
+
+        if(response.ok) {
+            localStorage.setItem('saved_' + jobId, 'true');
+            btn.innerText = "Sent ✓";
+            btn.style.background = "#64748b"; 
+            btn.style.cursor = "default";
+            
+            // Apply tick only if show mode is active
+            if(showApplyMode && !h3.innerHTML.includes('✓')) {
+                h3.innerHTML += ' <span style="color:#10b981; margin-left:8px;" title="Emailed successfully">✓</span>';
+            }
+        } else {
+            // This will tell you exactly WHY it failed
+            alert("API Error: " + result.message);
+            btn.innerText = "Failed ❌";
+            btn.style.background = "#ef4444";
+        }
+    } catch(err) {
+        alert("Network Error: Could not connect to Web3Forms.");
+        btn.innerText = "Error ❌";
+        btn.style.background = "#ef4444";
+    }
+}
+
+
+// ==========================================
+// 3. APP LOGIC & AUTO-LOAD SYSTEM
 // ==========================================
 let allPosts = [];
 let startIndex = 1;
@@ -111,6 +178,7 @@ let isFetching = false;
 let noMorePosts = false;
 let isAutoLoading = false;
 let uniqueCategories = new Set(["govt", "non govt", "grade"]);
+const currentYear = new Date().getFullYear();
 
 document.getElementById('targetDate').max = new Date().toISOString().split("T")[0];
 
@@ -147,14 +215,34 @@ function render(posts){
     posts.forEach(post => {
         const div = document.createElement("div");
         div.className = "post";
+        
+        const jobId = encodeURIComponent(post.link);
+        const isSaved = localStorage.getItem('saved_' + jobId);
+        const safeTitle = post.title.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+        
+        let applyBtnHtml = '';
+        let titleTick = '';
+
+        // Only generate button and tick if magic word is active!
+        if (showApplyMode) {
+            if(isSaved) {
+                applyBtnHtml = `<button class="apply-btn" style="background:#64748b; cursor:default;" onclick="event.stopPropagation()">Sent ✓</button>`;
+                titleTick = ' <span style="color:#10b981; margin-left:8px;" title="Emailed successfully">✓</span>';
+            } else {
+                applyBtnHtml = `<button class="apply-btn" onclick="triggerEmail(event, '${safeTitle}', '${post.link}', this.parentElement, '${jobId}')">Email Info</button>`;
+            }
+        }
+
         div.innerHTML = `
+            ${applyBtnHtml}
             <div class="badge">${post.type}</div>
-            <h3>${post.title}</h3>
+            <h3 style="margin-right: 90px;">${post.title}${titleTick}</h3>
             <div class="date">${post.date}</div>
             <div class="tags">
                 ${post.labels.map(x => `<span class="tag">${x}</span>`).join("")}
             </div>
         `;
+        
         div.onclick = () => window.open(post.link, "_blank");
         container.appendChild(div);
     });
@@ -167,7 +255,7 @@ function handleFeed(data){
     if(!entries || entries.length === 0){
         noMorePosts = true;
         isAutoLoading = false;
-        document.getElementById("loading-indicator").innerText = "No more posts available on the server.";
+        document.getElementById("loading-indicator").innerText = "No more posts available.";
         document.getElementById("loadBtn").innerText = "Auto Load";
         return;
     }
@@ -176,38 +264,35 @@ function handleFeed(data){
     const newPosts = entries.map(post => {
         const labels = (post.category || []).map(x => x.term);
         batchLabels.push(...labels);
-        
+        const fullDate = post.published.$t;
         return {
             title: post.title.$t,
-            date: post.published.$t.substring(0,10),
+            date: fullDate.substring(0,10),
+            year: new Date(fullDate).getFullYear(),
             labels,
             type: getType(labels),
             link: post.link.find(l => l.rel === "alternate").href
         };
-    });
+    }).filter(post => post.year <= currentYear + 1);
 
     updateCategoryDropdown(batchLabels);
 
-    // Merge array and sort strictly by published date
     allPosts = [...allPosts, ...newPosts].sort((a,b) => b.date.localeCompare(a.date));
     startIndex += maxResults;
     
     applySearch();
 
-    // Loop logic for auto loader
     if(isAutoLoading) {
         const targetDate = document.getElementById("targetDate").value;
         const oldestFetchedDate = allPosts[allPosts.length - 1].date;
         
-        // If we haven't reached the target date yet, fetch again
         if (oldestFetchedDate >= targetDate && !noMorePosts) {
             document.getElementById("loading-indicator").innerText = `Auto-loading... Reached: ${oldestFetchedDate}`;
-            // 400ms delay prevents the browser from blocking rapid requests
             setTimeout(() => { fetchPosts(); }, 400); 
         } else {
             isAutoLoading = false;
             document.getElementById("loadBtn").innerText = "Auto Load";
-            document.getElementById("loading-indicator").innerText = "Finished auto-loading. Scroll to load more.";
+            document.getElementById("loading-indicator").innerText = "Finished auto-loading.";
         }
     } else {
         document.getElementById("loading-indicator").innerText = "Scroll down to load more...";
@@ -215,7 +300,16 @@ function handleFeed(data){
 }
 
 function applySearch() {
-    const q = document.getElementById("search").value.toLowerCase();
+    const searchInput = document.getElementById("search");
+    const q = searchInput.value.toLowerCase().trim();
+    
+    if(q === "showit") {
+        showApplyMode = !showApplyMode;
+        searchInput.value = "";
+        render(allPosts); 
+        return;
+    }
+
     const selectedCategory = document.getElementById("categoryFilter").value.toLowerCase();
     const targetDate = document.getElementById("targetDate").value;
     
@@ -272,18 +366,15 @@ function fetchPosts() {
     isFetching = true;
     document.getElementById("loading-indicator").innerText = "Fetching data...";
 
-    // Remove old script tags to keep the DOM clean
     const oldScript = document.getElementById('blogger-jsonp');
     if(oldScript) oldScript.remove();
 
-    // orderby=published prevents newly updated old posts from breaking the time logic
     const script = document.createElement("script");
     script.id = 'blogger-jsonp';
     script.src = `https://fearyourcreatorndonotwasteothersright.blogspot.com/feeds/posts/default?alt=json-in-script&orderby=published&max-results=${maxResults}&start-index=${startIndex}&callback=handleFeed`;
     document.body.appendChild(script);
 }
 
-// Intersection Observer for infinite scrolling
 const observer = new IntersectionObserver((entries) => {
     if(entries[0].isIntersecting && !isAutoLoading) {
         fetchPosts();
