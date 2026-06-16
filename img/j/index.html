@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Job Circular Portal</title>
+
+<style>
+body{ font-family:system-ui,sans-serif; max-width:1000px; margin:auto; padding:20px; background:#f4f6f8; }
+h1{ text-align:center; }
+
+/* --- Login Screen UI --- */
+#login-screen { max-width: 350px; margin: 100px auto; background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); text-align: center; }
+#login-screen input { width: 100%; padding: 12px; margin: 15px 0; border: 1px solid #ccc; border-radius: 8px; box-sizing: border-box; font-size: 16px; }
+#login-screen button { width: 100%; padding: 12px; background: #2563eb; color: white; border: none; border-radius: 8px; font-size: 16px; cursor: pointer; font-weight: bold; }
+#login-error { color: red; margin-top: 10px; font-size: 14px; display: none; }
+
+/* --- App UI --- */
+#app-content { display: none; }
+.controls { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 15px; }
+.controls input, .controls select { padding: 10px; font-size: 15px; border: 1px solid #ccc; border-radius: 8px; }
+#search { flex-grow: 1; min-width: 200px; }
+.date-loader { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; background: #e2e8f0; padding: 15px; border-radius: 8px; width: 100%; box-sizing: border-box; margin-bottom: 20px;}
+
+.post{ background:white; margin:12px 0; padding:16px; border-radius:12px; cursor:pointer; box-shadow:0 1px 4px rgba(0,0,0,.08); transition: transform 0.2s;}
+.post:hover{ transform:translateY(-2px); }
+.badge{ display:inline-block; padding:4px 10px; border-radius:20px; font-size:12px; font-weight:bold; background:#2563eb; color:white; margin-bottom:8px; }
+.date{ color:#666; font-size:13px; margin-top:6px; }
+.tags{ margin-top:10px; }
+.tag{ display:inline-block; padding:3px 8px; margin:2px; border-radius:20px; background:#eee; font-size:12px; }
+.loading{ text-align:center; padding: 20px; font-weight: bold; color: #666; }
+</style>
+</head>
+<body>
+
+<div id="login-screen">
+    <h2>Secure Access</h2>
+    <p style="color:#666; font-size:14px;">Please enter your credentials</p>
+    <input type="password" id="pass-input" placeholder="Enter Password">
+    <button onclick="attemptLogin()">Login</button>
+    <div id="login-error">Incorrect password.</div>
+</div>
+
+<div id="app-content">
+    <h1>Job Circular</h1>
+
+    <div class="controls">
+        <input id="search" placeholder="Search jobs...">
+        
+        <select id="categoryFilter">
+            <option value="">All Categories</option>
+            <option value="govt">Govt</option>
+            <option value="non govt">Non Govt</option>
+            <option value="grade">Grade</option>
+        </select>
+    </div>
+
+    <div class="date-loader">
+        <label><strong>Time Machine:</strong> Load back to:</label>
+        <input type="date" id="targetDate">
+        <button id="loadBtn" onclick="toggleAutoLoad()" style="background:#2563eb; color:white; border:none; padding:10px 15px; border-radius:8px; cursor:pointer; font-weight:bold;">Auto Load</button>
+    </div>
+
+    <div id="posts"></div>
+    <div id="loading-indicator" class="loading">Scroll down to load more...</div>
+</div>
+
+<script>
+// ==========================================
+// 1. SECURITY / ENCRYPTION SYSTEM
+// ==========================================
+
+const TARGET_HASH = "64915d049757c06befce3d2d7f11992e68516b61fe2097f8d0eb4e373598ea4a"; 
+
+// Cryptographic hash function
+async function hashPassword(password) {
+    const msgBuffer = new TextEncoder().encode(password);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+// Handle Login attempt
+async function attemptLogin() {
+    const input = document.getElementById("pass-input").value;
+    const hash = await hashPassword(input);
+    
+    if(hash === TARGET_HASH) {
+        document.getElementById("login-screen").style.display = "none";
+        document.getElementById("app-content").style.display = "block";
+        // Start the observer to load the first batch only AFTER login
+        observer.observe(document.getElementById("loading-indicator"));
+    } else {
+        document.getElementById("login-error").style.display = "block";
+    }
+}
+
+// Allow pressing 'Enter' on keyboard to login
+document.getElementById("pass-input").addEventListener("keypress", function(event) {
+  if (event.key === "Enter") attemptLogin();
+});
+
+
+// ==========================================
+// 2. APP LOGIC & AUTO-LOAD SYSTEM
+// ==========================================
+let allPosts = [];
+let startIndex = 1;
+const maxResults = 50;
+let isFetching = false;
+let noMorePosts = false;
+let isAutoLoading = false;
+let uniqueCategories = new Set(["govt", "non govt", "grade"]);
+
+document.getElementById('targetDate').max = new Date().toISOString().split("T")[0];
+
+function getType(labels){
+    let lowerLabels = labels.map(l => l.toLowerCase());
+    if(lowerLabels.includes("result") || lowerLabels.includes("final-result")) return "RESULT";
+    if(lowerLabels.includes("admit")) return "ADMIT";
+    if(lowerLabels.includes("notice")) return "NOTICE";
+    if(lowerLabels.includes("bank")) return "BANK";
+    if(lowerLabels.includes("railway")) return "RAILWAY";
+    if(lowerLabels.includes("defense")) return "DEFENSE";
+    if(lowerLabels.includes("teacher")) return "TEACHER";
+    return "JOB";
+}
+
+function updateCategoryDropdown(labels) {
+    const select = document.getElementById("categoryFilter");
+    labels.forEach(label => {
+        let cleanLabel = label.toLowerCase();
+        if(!uniqueCategories.has(cleanLabel)) {
+            uniqueCategories.add(cleanLabel);
+            let option = document.createElement("option");
+            option.value = cleanLabel;
+            option.textContent = label;
+            select.appendChild(option);
+        }
+    });
+}
+
+function render(posts){
+    const container = document.getElementById("posts");
+    container.innerHTML = "";
+
+    posts.forEach(post => {
+        const div = document.createElement("div");
+        div.className = "post";
+        div.innerHTML = `
+            <div class="badge">${post.type}</div>
+            <h3>${post.title}</h3>
+            <div class="date">${post.date}</div>
+            <div class="tags">
+                ${post.labels.map(x => `<span class="tag">${x}</span>`).join("")}
+            </div>
+        `;
+        div.onclick = () => window.open(post.link, "_blank");
+        container.appendChild(div);
+    });
+}
+
+function handleFeed(data){
+    isFetching = false;
+    const entries = data.feed.entry;
+
+    if(!entries || entries.length === 0){
+        noMorePosts = true;
+        isAutoLoading = false;
+        document.getElementById("loading-indicator").innerText = "No more posts available on the server.";
+        document.getElementById("loadBtn").innerText = "Auto Load";
+        return;
+    }
+
+    let batchLabels = [];
+    const newPosts = entries.map(post => {
+        const labels = (post.category || []).map(x => x.term);
+        batchLabels.push(...labels);
+        
+        return {
+            title: post.title.$t,
+            date: post.published.$t.substring(0,10),
+            labels,
+            type: getType(labels),
+            link: post.link.find(l => l.rel === "alternate").href
+        };
+    });
+
+    updateCategoryDropdown(batchLabels);
+
+    // Merge array and sort strictly by published date
+    allPosts = [...allPosts, ...newPosts].sort((a,b) => b.date.localeCompare(a.date));
+    startIndex += maxResults;
+    
+    applySearch();
+
+    // Loop logic for auto loader
+    if(isAutoLoading) {
+        const targetDate = document.getElementById("targetDate").value;
+        const oldestFetchedDate = allPosts[allPosts.length - 1].date;
+        
+        // If we haven't reached the target date yet, fetch again
+        if (oldestFetchedDate >= targetDate && !noMorePosts) {
+            document.getElementById("loading-indicator").innerText = `Auto-loading... Reached: ${oldestFetchedDate}`;
+            // 400ms delay prevents the browser from blocking rapid requests
+            setTimeout(() => { fetchPosts(); }, 400); 
+        } else {
+            isAutoLoading = false;
+            document.getElementById("loadBtn").innerText = "Auto Load";
+            document.getElementById("loading-indicator").innerText = "Finished auto-loading. Scroll to load more.";
+        }
+    } else {
+        document.getElementById("loading-indicator").innerText = "Scroll down to load more...";
+    }
+}
+
+function applySearch() {
+    const q = document.getElementById("search").value.toLowerCase();
+    const selectedCategory = document.getElementById("categoryFilter").value.toLowerCase();
+    const targetDate = document.getElementById("targetDate").value;
+    
+    let filtered = allPosts;
+
+    if(q) {
+        filtered = filtered.filter(post => 
+            post.title.toLowerCase().includes(q) || 
+            post.labels.join(" ").toLowerCase().includes(q)
+        );
+    }
+
+    if(selectedCategory) {
+        filtered = filtered.filter(post => 
+            post.labels.some(l => l.toLowerCase().includes(selectedCategory))
+        );
+    }
+    
+    if(targetDate) {
+        filtered = filtered.filter(post => post.date >= targetDate);
+    }
+
+    render(filtered);
+}
+
+document.getElementById("search").addEventListener("input", applySearch);
+document.getElementById("categoryFilter").addEventListener("change", applySearch);
+document.getElementById("targetDate").addEventListener("change", applySearch);
+
+function toggleAutoLoad() {
+    const targetDate = document.getElementById("targetDate").value;
+    const loadBtn = document.getElementById("loadBtn");
+
+    if(!targetDate) {
+        alert("Please pick a date first!");
+        return;
+    }
+    
+    if(isAutoLoading) {
+        isAutoLoading = false;
+        loadBtn.innerText = "Auto Load";
+        document.getElementById("loading-indicator").innerText = "Scroll down to load more...";
+        return;
+    }
+
+    isAutoLoading = true;
+    loadBtn.innerText = "Stop Loading";
+    document.getElementById("loading-indicator").innerText = "Auto-loading started...";
+    fetchPosts();
+}
+
+function fetchPosts() {
+    if(isFetching || noMorePosts) return;
+    isFetching = true;
+    document.getElementById("loading-indicator").innerText = "Fetching data...";
+
+    // Remove old script tags to keep the DOM clean
+    const oldScript = document.getElementById('blogger-jsonp');
+    if(oldScript) oldScript.remove();
+
+    // orderby=published prevents newly updated old posts from breaking the time logic
+    const script = document.createElement("script");
+    script.id = 'blogger-jsonp';
+    script.src = `https://fearyourcreatorndonotwasteothersright.blogspot.com/feeds/posts/default?alt=json-in-script&orderby=published&max-results=${maxResults}&start-index=${startIndex}&callback=handleFeed`;
+    document.body.appendChild(script);
+}
+
+// Intersection Observer for infinite scrolling
+const observer = new IntersectionObserver((entries) => {
+    if(entries[0].isIntersecting && !isAutoLoading) {
+        fetchPosts();
+    }
+}, { rootMargin: "200px" });
+
+</script>
+</body>
+</html>
