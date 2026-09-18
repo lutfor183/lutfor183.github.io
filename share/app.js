@@ -16,6 +16,13 @@ const ANIMAL = ['Otter','Falcon','Fox','Heron','Badger','Wren','Seal','Lynx','Do
 
 let myId = rid(8), myName = load('drop.name') || `${pick(ADJ)} ${pick(ANIMAL)}`;
 save('drop.name', myName);
+// device icon for peer cards (SHAREit-style): phone vs laptop, exchanged in hello
+const myDevice = (/android|iphone|ipad|ipod|mobile/i.test(navigator.userAgent||'') || ((navigator.maxTouchPoints||0)>0 && Math.min(screen.width||999,screen.height||999)<768)) ? 'phone' : 'laptop';
+const helloMsg = ()=>({name:myName,id:myId,device:myDevice});
+const DEV_ICON = {
+  phone:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="7" y="2.5" width="10" height="19" rx="2.5"/><path d="M11 18.5h2"/></svg>',
+  laptop:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="4.5" width="18" height="11" rx="1.5"/><path d="M2 19.5h20"/></svg>'
+};
 // Room codes are always exactly 3 lowercase letters (case-insensitive input).
 // Old stored values from other lengths are discarded so both devices land together.
 // Invite links (#r=) still accept 3–8 chars so old QR codes keep working.
@@ -54,7 +61,6 @@ function roomUrl(){ const u = new URL(location.href); u.hash = '#' + roomCode; r
 function fmtSize(b){ if(b>=1e9) return (Math.round(b/1e8)/10)+' GB'; if(b>=1e6) return (Math.round(b/1e5)/10)+' MB'; if(b>1000) return Math.round(b/1000)+' KB'; return b+' B'; }
 function toast(msg){ toastEl.textContent = msg; toastEl.classList.add('show'); clearTimeout(toastEl._t); toastEl._t = setTimeout(()=>toastEl.classList.remove('show'), 2800); }
 function colorFor(peerId){ let h=0; for(const c of peerId) h=(h*31+c.charCodeAt(0))>>>0; return PALETTE[h%PALETTE.length]; }
-function initials(name){ return name.split(/\s+/).map(w=>w[0]).slice(0,2).join('').toUpperCase(); }
 
 /* ---------- theme ---------- */
 const themeBtn = $('#themeBtn');
@@ -114,7 +120,11 @@ async function drawQR(){
     const svg = qrEl.querySelector('svg'); if(svg){svg.setAttribute('width','140');svg.setAttribute('height','140');}
   }catch{ qrEl.innerHTML='<span class="muted" style="font-size:12px;padding:10px;text-align:center">'+roomCode+'</span>'; }
 }
-drawQR();
+/* QR lib (~15KB) loads only when the invite card scrolls into view — keeps first paint fast */
+if('IntersectionObserver' in window){
+  const qrIO = new IntersectionObserver((es)=>{ es.forEach(e=>{ if(e.isIntersecting){ drawQR(); qrIO.disconnect(); } }); }, {rootMargin:'300px'});
+  qrIO.observe(qrEl);
+}else drawQR();
 
 /* ---------- peers UI ---------- */
 function renderPeers(){
@@ -127,8 +137,8 @@ function renderPeers(){
   list.forEach(([id,p],i)=>{
     const b=document.createElement('button');
     b.type='button'; b.className='peer enter'; b.setAttribute('role','listitem');
-    b.setAttribute('aria-label',`Send to ${p.name}`);
-    b.innerHTML=`<span class="avatar" style="background:${p.color}">${initials(p.name)}</span><span class="pname"></span><span class="psub">Tap to send</span>`;
+    b.setAttribute('aria-label',`Send to ${p.name} (${p.device||'laptop'})`);
+    b.innerHTML=`<span class="avatar" style="background:${p.color}">${DEV_ICON[p.device]||DEV_ICON.laptop}</span><span class="pname"></span><span class="psub">${p.device==='phone'?'Phone':'Computer'} · tap to send</span>`;
     b.querySelector('.pname').textContent=p.name;
     setTimeout(()=>b.classList.remove('enter'),600);
     b.addEventListener('click', ()=>peerMenu(id));
@@ -242,13 +252,25 @@ function progressCard(id,name,size,dir){
   d.querySelector('.t-name').textContent=(dir==='up'?'Sending ':'Receiving ')+name;
   transfersEl.prepend(d); return d;
 }
-function setProgress(id,frac){
+const speedMap = {}; // transferId -> {t0, lastT, lastFrac} for live KB/s
+function speedText(id, frac, size){
+  const now = performance.now();
+  let s = speedMap[id];
+  if(!s) s = speedMap[id] = {t0:now, lastT:now, lastFrac:0};
+  const dt = (now - s.lastT)/1000;
+  let inst = 0;
+  if(size && dt > 0.25){ inst = (frac - s.lastFrac)*size/dt; s.lastT = now; s.lastFrac = frac; }
+  const avg = size ? (frac*size)/Math.max((now - s.t0)/1000, 0.1) : 0;
+  const v = inst > 0 ? inst*0.7 + avg*0.3 : avg;
+  return Math.round(frac*100)+'% · '+fmtSize(v)+'/s';
+}
+function setProgress(id,frac,size){
   const d=document.getElementById('t-'+id); if(!d) return;
   const pct=Math.round(frac*100);
   d.querySelector('.bar > i').style.width=pct+'%';
   d.querySelector('.bar').setAttribute('aria-valuenow',pct);
-  d.querySelector('.t-meta').textContent=pct+'%';
-  if(pct>=100){d.classList.add('done'); setTimeout(()=>d.remove(),8000);}
+  d.querySelector('.t-meta').textContent = size ? speedText(id,frac,size) : pct+'%';
+  if(pct>=100){d.classList.add('done'); delete speedMap[id]; setTimeout(()=>d.remove(),8000);}
 }
 
 async function sendFile(file, peerId){
@@ -262,10 +284,10 @@ async function sendFile(file, peerId){
   try{
     await fileA.send(file, {
       target: peerId,
-      metadata: {transferId, name:file.name.slice(0,180), type:file.type||'application/octet-stream'},
-      onProgress: (frac)=>setProgress(transferId, frac)
+      metadata: {transferId, name:file.name.slice(0,180), type:file.type||'application/octet-stream', size:file.size},
+      onProgress: (frac)=>setProgress(transferId, frac, file.size)
     });
-    setProgress(transferId,1);
+    setProgress(transferId,1,file.size);
     toast('Sent '+file.name);
   }catch(err){ console.warn('send failed',err); toast('Send failed — peer may have left. Tap Retry.'); }
   keepAwake(false);
@@ -348,7 +370,7 @@ function refreshNetInfo(){
 function stopHeartbeat(){ if(helloTimer){ clearInterval(helloTimer); helloTimer=null; } }
 function startHeartbeat(gen){
   stopHeartbeat();
-  const beat = ()=>{ if(gen===connectGen && helloA && !peers.size) helloA.send({name:myName,id:myId}).catch(()=>{}); };
+  const beat = ()=>{ if(gen===connectGen && helloA && !peers.size) helloA.send(helloMsg()).catch(()=>{}); };
   helloTimer = setInterval(beat, 3000);
 }
 async function connect(){
@@ -376,21 +398,26 @@ async function connect(){
   connected = true;
 
   room.onPeerJoin = (id)=>{
-    helloA.send({name:myName,id:myId},{target:id}).catch(()=>{});
+    helloA.send(helloMsg(),{target:id}).catch(()=>{});
     setStatusWaiting();
   };
   room.onPeerLeave = (id)=>{ peers.delete(id); renderPeers(); if(!peers.size && gen===connectGen) startHeartbeat(gen); };
   helloA.onMessage = (data,{peerId})=>{
     const isNew = !peers.has(peerId);
-    peers.set(peerId,{name:String(data?.name||'Device').slice(0,40),color:colorFor(peerId+String(data?.id||''))});
+    peers.set(peerId,{name:String(data?.name||'Device').slice(0,40),color:colorFor(peerId+String(data?.id||'')),device:String(data?.device)==='phone'?'phone':'laptop'});
     renderPeers();
     if(peers.size) stopHeartbeat();
     // reply only once per new peer — otherwise two devices ping-pong hellos forever
-    if(isNew) helloA.send({name:myName,id:myId},{target:peerId}).catch(()=>{});
+    if(isNew) helloA.send(helloMsg(),{target:peerId}).catch(()=>{});
   };
   msgA.onMessage = (d,{peerId})=>{ const p=peers.get(peerId); addRecvText(String(d.text||''), (p?.name||'Device')+' · received', false); toast('Message received'); };
   fileA.onReceiveProgress = (frac,{peerId,metadata})=>{
-    if(metadata?.transferId) setProgress(metadata.transferId, frac);
+    const tid = metadata?.transferId; if(!tid) return;
+    if(!document.getElementById('t-'+tid)){
+      progressCard(tid, String(metadata?.name||'file'), '', 'down');
+      keepAwake(true);
+    }
+    setProgress(tid, frac, metadata?.size||0);
   };
   fileA.onMessage = (data,{peerId,metadata})=>{
     const name = String(metadata?.name||'file').slice(0,180);
@@ -399,7 +426,7 @@ async function connect(){
     const blob = data instanceof Blob ? data : new Blob([data],{type});
     const url = URL.createObjectURL(blob);
     addRecvFile(url,name,blob.size,type);
-    setProgress(transferId,1);
+    setProgress(transferId,1,blob.size);
     toast('Received '+name);
     if(autoSaveEl.checked){ const a=document.createElement('a'); a.href=url; a.download=name; document.body.appendChild(a); a.click(); a.remove(); }
     keepAwake(false);
@@ -409,7 +436,7 @@ async function connect(){
   // joiner, so keep a 3s heartbeat until the first peer appears (cleared on
   // peer join / room change). This is what fixes "phone joins later, sees
   // nothing" — the old code stopped announcing after 4s.
-  helloA.send({name:myName,id:myId}).catch(()=>{});
+  helloA.send(helloMsg()).catch(()=>{});
   startHeartbeat(gen);
   refreshNetInfo();
   setTimeout(()=>{ if(gen===connectGen) refreshNetInfo(); }, 3000);
@@ -431,7 +458,7 @@ async function reconnect(){
 }
 $('#retryBtn').addEventListener('click', reconnect);
 // Phone sleep / network switch kills signalling: re-announce when back.
-window.addEventListener('online', ()=>{ if(helloA && !peers.size){ helloA.send({name:myName,id:myId}).catch(()=>{}); reconnect(); } });
+window.addEventListener('online', ()=>{ if(helloA && !peers.size){ helloA.send(helloMsg()).catch(()=>{}); reconnect(); } });
 try{
   if('serviceWorker' in navigator){ window.addEventListener('load', ()=>navigator.serviceWorker.register('./sw.js').catch(()=>{})); }
 }catch{}
@@ -440,5 +467,5 @@ connect().catch(err=>{ console.warn(err); connected=false; statusText.textConten
 document.addEventListener('visibilitychange', ()=>{
   if(document.hidden){ keepAwake(false); return; }
   // coming back from phone lock: re-announce in case the other side gave up
-  if(helloA && connected && !peers.size) helloA.send({name:myName,id:myId}).catch(()=>{});
+  if(helloA && connected && !peers.size) helloA.send(helloMsg()).catch(()=>{});
 });

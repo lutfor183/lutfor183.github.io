@@ -8,6 +8,12 @@
 <meta name="theme-color" content="#2563eb" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#121212" media="(prefers-color-scheme: dark)">
 <link rel="manifest" href="./manifest.webmanifest">
+<link rel="preconnect" href="https://esm.run" crossorigin>
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+<link rel="dns-prefetch" href="//relay.damus.io">
+<link rel="dns-prefetch" href="//nos.lol">
+<link rel="dns-prefetch" href="//relay.primal.net">
+<link rel="dns-prefetch" href="//relay.ditto.pub">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='14' fill='%232563eb'/%3E%3Cpath d='M10 16.5l4 4 8-9' stroke='white' stroke-width='2.6' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
 <style>
 :root{
@@ -35,7 +41,7 @@ a{color:var(--primary)}
 button{font:inherit}
 .wrap{width:100%;max-width:var(--max);margin:0 auto;padding:0 16px}
 header.top{border-bottom:1px solid var(--border);background:color-mix(in srgb,var(--card) 88%,transparent);backdrop-filter:blur(8px);position:sticky;top:0;z-index:20}
-.top-in{display:flex;align-items:center;justify-content:space-between;padding:12px 0;gap:12px}
+.top-in{display:flex;align-items:center;justify-content:space-between;padding:8px 0;gap:12px}
 .brand{display:flex;align-items:center;gap:10px;text-decoration:none;color:var(--text)}
 .brand-mark{width:32px;height:32px;border-radius:50%;background:var(--primary);display:grid;place-items:center;flex:none}
 .brand-mark svg{width:18px;height:18px;stroke:#fff}
@@ -78,6 +84,7 @@ html[data-theme="dark"] .btn.primary{color:#0b1220}
 .peer:active{transform:scale(.98)}
 .peer:focus-visible{outline:2px solid var(--primary);outline-offset:2px}
 .peer .avatar{width:56px;height:56px;border-radius:50%;display:grid;place-items:center;color:#fff;font-weight:700;font-size:20px}
+.peer .avatar svg{width:26px;height:26px}
 .peer .pname{font-size:14px;font-weight:600;word-break:break-word}
 .peer .psub{font-size:12px;color:var(--muted)}
 .peer.sending{border-color:var(--accent)}
@@ -168,10 +175,7 @@ footer .wrap{display:flex;gap:8px;flex-wrap:wrap;align-items:center;justify-cont
         <span class="core"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="2.5" width="10" height="19" rx="2.5"/><path d="M11 18.5h2"/></svg></span>
       </div>
       <strong style="color:var(--text)">Searching for nearby devices…</strong>
-      <ol>
-        <li>Keep this page open.</li>
-        <li>Open the invite link below on the other device.</li>
-      </ol>
+      <p style="margin:8px 0 0">Open the invite link below on the other device.</p>
     </div>
     <div class="actions">
       <button class="btn primary big" id="sendFilesBtn" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4"/><path d="M7 9l5-5 5 5"/><path d="M4 20h16"/></svg>Send files</button>
@@ -243,7 +247,7 @@ footer .wrap{display:flex;gap:8px;flex-wrap:wrap;align-items:center;justify-cont
 </dialog>
 
 <div id="toast" role="status" aria-live="polite"></div>
-<footer><div class="wrap"><span>Drop · direct device-to-device sharing over WebRTC. No accounts, no uploads.</span><a href="../">Back to home</a></div></footer>
+<footer><div class="wrap"><span>Drop · P2P, no uploads.</span><a href="../">Home</a></div></footer>
 <script type="module" src="./app.js"></script>
 </body>
 </html>
