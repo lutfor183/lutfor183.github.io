@@ -1,5 +1,5 @@
 /* Drop service worker — app-shell cache, relative scope for GitHub Pages subpaths. */
-const CACHE = 'drop-v7';
+const CACHE = 'drop-v8';
 const SHELL = ['./', './index.html', './scan.html', './manifest.webmanifest'];
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(()=>self.skipWaiting()).catch(()=>{}));

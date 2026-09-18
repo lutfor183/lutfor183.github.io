@@ -138,7 +138,7 @@ function renderPeers(){
     const b=document.createElement('button');
     b.type='button'; b.className='peer enter'; b.setAttribute('role','listitem');
     b.setAttribute('aria-label',`Send to ${p.name} (${p.device||'laptop'})`);
-    b.innerHTML=`<span class="avatar" style="background:${p.color}">${DEV_ICON[p.device]||DEV_ICON.laptop}</span><span class="pname"></span><span class="psub">${p.device==='phone'?'Phone':'Computer'} · tap to send</span>`;
+    b.innerHTML=`<span class="avatar" style="background:${p.color}">${DEV_ICON[p.device]||DEV_ICON.laptop}</span><span class="pgrow"><span class="pname"></span><span class="psub">${p.device==='phone'?'Phone':'Computer'} · tap to send</span></span>`;
     b.querySelector('.pname').textContent=p.name;
     setTimeout(()=>b.classList.remove('enter'),600);
     b.addEventListener('click', ()=>peerMenu(id));
