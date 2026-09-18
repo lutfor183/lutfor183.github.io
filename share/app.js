@@ -144,7 +144,7 @@ function renderPeers(){
     b.addEventListener('click', ()=>peerMenu(id));
     b.addEventListener('dragover', e=>{e.preventDefault();b.classList.add('dragover');});
     b.addEventListener('dragleave', ()=>b.classList.remove('dragover'));
-    b.addEventListener('drop', e=>{e.preventDefault();b.classList.remove('dragover');handleFiles(e.dataTransfer.files,id);});
+    b.addEventListener('drop', async e=>{e.preventDefault();b.classList.remove('dragover');handleFiles(await entriesFromDrop(e.dataTransfer),id);});
     peersEl.appendChild(b);
   });
 }
@@ -185,26 +185,39 @@ $('#sendFilesBtn').addEventListener('click', ()=>{
     if(!dlg.open) dlg.showModal();
   }
 });
-fileInput.addEventListener('change', ()=>{ handleFiles(fileInput.files, fileInput.dataset.to||null); fileInput.value=''; });
+fileInput.addEventListener('change', ()=>{ handleFiles(filesToEntries(fileInput.files), fileInput.dataset.to||null); fileInput.value=''; });
 
 /* text dialog */
 let textTarget=null;
 function openTextDlg(peerId){ textTarget=peerId; const p=peers.get(peerId); $('#textTo').textContent=p?p.name:'device'; $('#textInput').value=''; const d=$('#textDlg'); if(!d.open) d.showModal(); setTimeout(()=>$('#textInput').focus(),50); }
+/* shared "which device?" picker; cb(peerId) runs after choice */
+function choosePeer(title, cb){
+  if(peers.size===1){ cb([...peers.keys()][0]); return; }
+  const dlg=$('#peerDlg'), pick=$('#peerPick');
+  $('#peerDlgH').textContent=title; pick.innerHTML='';
+  [...peers.entries()].forEach(([id,p])=>{
+    const b=document.createElement('button'); b.className='btn small'; b.type='button'; b.textContent=p.name;
+    b.addEventListener('click', ()=>{dlg.close(); cb(id);});
+    pick.appendChild(b);
+  });
+  if(!dlg.open) dlg.showModal();
+}
 $('#sendTextBtn').addEventListener('click', ()=>{
   if(!peers.size){toast('No devices yet — invite one first');return;}
-  openTextDlg(peers.size===1?[...peers.keys()][0]:null);
-  if(peers.size>1){
-    // if no explicit target, let user pick via peer dialog first
-    $('#textDlg').close();
-    const dlg=$('#peerDlg'), pick=$('#peerPick');
-    $('#peerDlgH').textContent='Choose device for text'; pick.innerHTML='';
-    [...peers.entries()].forEach(([id,p])=>{
-      const b=document.createElement('button'); b.className='btn small'; b.type='button'; b.textContent=p.name;
-      b.addEventListener('click', ()=>{dlg.close(); openTextDlg(id);});
-      pick.appendChild(b);
-    });
-    dlg.showModal();
-  }
+  if(peers.size===1){ openTextDlg([...peers.keys()][0]); return; }
+  // if no explicit target, let user pick via peer dialog first
+  try{ $('#textDlg').close(); }catch{}
+  choosePeer('Choose device for text', openTextDlg);
+});
+/* one-tap clipboard push */
+$('#clipBtn').addEventListener('click', async ()=>{
+  if(!peers.size){toast('No devices yet — invite one first');return;}
+  let txt='';
+  try{ txt=await navigator.clipboard.readText(); }
+  catch{ toast('Clipboard blocked — tap the page first, then retry'); return; }
+  txt=(txt||'').trim();
+  if(!txt){ toast('Clipboard is empty — copy something first'); return; }
+  choosePeer('Push clipboard to…', (id)=>{ sendText(txt,id); toast('Clipboard sent'); });
 });
 $('#textForm').addEventListener('submit', e=>{
   if(e.submitter && e.submitter.value==='send'){
@@ -215,41 +228,69 @@ $('#textForm').addEventListener('submit', e=>{
   }
 });
 
-/* drag-drop + paste anywhere */
+/* drag-drop + paste anywhere — folders traversed, structure preserved in `path` */
 ['dragover','dragenter'].forEach(ev=>document.addEventListener(ev,e=>{e.preventDefault();}));
-document.addEventListener('drop',e=>{
+async function entriesFromDrop(dt){
+  const items=[...(dt.items||[])].filter(i=>i.kind==='file');
+  if(items.length && items[0].webkitGetAsEntry){
+    const out=[];
+    const walk=(entry,dir)=>new Promise(res=>{
+      if(entry.isFile) entry.file(f=>{ out.push({file:f,path:dir+entry.name}); res(); },()=>res());
+      else if(entry.isDirectory){
+        const r=entry.createReader();
+        const read=()=>r.readEntries(es=>{ if(!es.length) return res(); Promise.all(es.map(e=>walk(e,dir+entry.name+'/'))).then(read); },()=>res());
+        read();
+      } else res();
+    });
+    await Promise.all(items.map(i=>{ const e=i.webkitGetAsEntry(); return e?walk(e,''):Promise.resolve(); }));
+    if(out.length) return out;
+  }
+  return [...(dt.files||[])].map(f=>({file:f,path:f.webkitRelativePath||f.name}));
+}
+const filesToEntries = (files)=>[...(files||[])].map(f=>({file:f,path:f.webkitRelativePath||f.name}));
+document.addEventListener('drop',async e=>{
   e.preventDefault();
-  if(!e.dataTransfer.files.length) return;
-  if(peers.size===1) handleFiles(e.dataTransfer.files,[...peers.keys()][0]);
-  else if(peers.size>1){ pendingDropFiles=e.dataTransfer.files; const dlg=$('#peerDlg'),pick=$('#peerPick'); $('#peerDlgH').textContent='Drop: choose device'; pick.innerHTML=''; [...peers.entries()].forEach(([id,p])=>{const b=document.createElement('button');b.className='btn small';b.type='button';b.textContent=p.name;b.addEventListener('click',()=>{dlg.close();handleFiles(pendingDropFiles,id);});pick.appendChild(b);}); dlg.showModal(); }
+  if(!e.dataTransfer) return;
+  const entries=await entriesFromDrop(e.dataTransfer);
+  if(!entries.length) return;
+  if(peers.size===1) handleFiles(entries,[...peers.keys()][0]);
+  else if(peers.size>1){ pendingDropFiles=entries; const dlg=$('#peerDlg'),pick=$('#peerPick'); $('#peerDlgH').textContent='Drop: choose device'; pick.innerHTML=''; [...peers.entries()].forEach(([id,p])=>{const b=document.createElement('button');b.className='btn small';b.type='button';b.textContent=p.name;b.addEventListener('click',()=>{dlg.close();handleFiles(pendingDropFiles,id);});pick.appendChild(b);}); dlg.showModal(); }
   else toast('No devices yet — invite one first');
 });
 let pendingDropFiles=null;
 document.addEventListener('paste',e=>{
   const files=[...(e.clipboardData?.files||[])];
   if(!files.length) return;
-  if(peers.size===1) handleFiles(files,[...peers.keys()][0]);
+  const entries=filesToEntries(files);
+  if(peers.size===1) handleFiles(entries,[...peers.keys()][0]);
   else if(peers.size) toast('File pasted — tap a device to choose where to send');
 });
 
 /* ---------- transfers ---------- */
-function handleFiles(list, toPeer){
-  if(!list || !list.length) return;
+function handleFiles(entries, toPeer){
+  const list=[...(entries||[])].filter(e=>e && e.file);
+  if(!list.length) return;
   if(!peers.size){toast('No devices yet — invite one first');return;}
   const target = toPeer && peers.has(toPeer) ? toPeer : (peers.size===1?[...peers.keys()][0]:null);
   if(!target){ // ask
     pendingDropFiles=list;
-    const dlg=$('#peerDlg'),pick=$('#peerPick'); $('#peerDlgH').textContent='Choose device'; pick.innerHTML='';
+    const dlg=$('#peerDlg'),pick=$('#peerPick'); $('#peerDlgH').textContent=list.length>1?`Send ${list.length} files to…`:'Choose device'; pick.innerHTML='';
     [...peers.entries()].forEach(([id,p])=>{const b=document.createElement('button');b.className='btn small';b.type='button';b.textContent=p.name;b.addEventListener('click',()=>{dlg.close();handleFiles(pendingDropFiles,id);});pick.appendChild(b);});
     dlg.showModal(); return;
   }
-  [...list].forEach(f=>sendFile(f,target));
+  list.forEach(({file,path})=>enqueueSend(file,target,path||file.webkitRelativePath||file.name));
 }
 
-function progressCard(id,name,size,dir){
+function progressCard(id,name,size,dir,onCancel){
   const d=document.createElement('div'); d.className='t'; d.id='t-'+id;
   d.innerHTML=`<div class="t-top"><span class="t-name"></span><span class="t-meta"></span></div><div class="bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i></i></div>`;
   d.querySelector('.t-name').textContent=(dir==='up'?'Sending ':'Receiving ')+name;
+  if(onCancel){
+    const x=document.createElement('button'); x.className='btn small'; x.type='button'; x.textContent='✕';
+    x.setAttribute('aria-label', dir==='up' ? 'Cancel transfer' : 'Dismiss');
+    x.addEventListener('click', onCancel);
+    d.querySelector('.t-top').appendChild(x);
+  }
   transfersEl.prepend(d); return d;
 }
 const speedMap = {}; // transferId -> {t0, lastT, lastFrac} for live KB/s
@@ -273,24 +314,44 @@ function setProgress(id,frac,size){
   if(pct>=100){d.classList.add('done'); delete speedMap[id]; setTimeout(()=>d.remove(),8000);}
 }
 
-async function sendFile(file, peerId){
-  // Trystero chunks + serialises Blobs itself — send whole file with metadata
-  if(!fileA || !connected){ toast('Not connected yet — wait a moment, then Retry'); return; }
-  if(!peerId || !peers.has(peerId)){ toast('That device left — invite again'); return; }
-  const transferId = (crypto.randomUUID?crypto.randomUUID():rid(12));
-  const card=progressCard(transferId,file.name,fmtSize(file.size),'up');
+/* ---------- send queue: one file at a time (kind to mobile radios), cancellable ---------- */
+const sendQueue = [];
+let activeSend = null;
+function enqueueSend(file, peerId, relPath){
+  const path = String(relPath||file.webkitRelativePath||file.name||'file').slice(0,260);
+  const job = {id:(crypto.randomUUID?crypto.randomUUID():rid(12)), file, peerId, path, ctrl:new AbortController()};
+  sendQueue.push(job);
+  if(activeSend || sendQueue.length>1) toast('Queued · '+sendQueue.length+' waiting');
+  pumpQueue();
+}
+async function pumpQueue(){
+  if(activeSend || !sendQueue.length) return;
+  const job = sendQueue.shift();
+  if(!peers.has(job.peerId)){ toast('Skipped — that device left'); pumpQueue(); return; }
+  if(!fileA || !connected){ toast('Not connected yet — wait a moment, then Retry'); sendQueue.unshift(job); return; }
+  activeSend = job;
+  const {file, peerId, id, path} = job;
+  const card = progressCard(id, path, fmtSize(file.size), 'up', ()=>job.ctrl.abort());
   card.querySelector('.t-meta').textContent='0% · '+fmtSize(file.size);
   keepAwake(true);
   try{
     await fileA.send(file, {
       target: peerId,
-      metadata: {transferId, name:file.name.slice(0,180), type:file.type||'application/octet-stream', size:file.size},
-      onProgress: (frac)=>setProgress(transferId, frac, file.size)
+      metadata: {transferId:id, name:file.name.slice(0,180), path, type:file.type||'application/octet-stream', size:file.size},
+      signal: job.ctrl.signal,
+      onProgress: (frac)=>setProgress(id, frac, file.size)
     });
-    setProgress(transferId,1,file.size);
+    setProgress(id,1,file.size);
     toast('Sent '+file.name);
-  }catch(err){ console.warn('send failed',err); toast('Send failed — peer may have left. Tap Retry.'); }
-  keepAwake(false);
+  }catch(err){
+    document.getElementById('t-'+id)?.remove();
+    delete speedMap[id];
+    if(job.ctrl.signal.aborted) toast('Cancelled '+file.name);
+    else{ console.warn('send failed',err); toast('Send failed — peer may have left. Tap Retry.'); }
+  }
+  activeSend = null;
+  keepAwake(sendQueue.length>0);
+  pumpQueue();
 }
 function sendText(text, peerId){
   if(!msgA || !connected){ toast('Not connected yet — wait a moment, then Retry'); return; }
@@ -302,20 +363,27 @@ function sendText(text, peerId){
   }).catch(()=>toast('Send failed — peer may have left. Tap Retry.'));
 }
 
-function addRecvFile(url,name,size,type){
+function addRecvFile(url,name,size,type,path){
   recvEmpty.style.display='none';
   const d=document.createElement('div'); d.className='recv';
   const isImg=type.startsWith('image/');
   d.innerHTML=`<span class="file-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M4 21h16"/></svg></span><div class="grow"><div class="fname"></div><div class="fmeta"></div></div>`;
   d.querySelector('.fname').textContent=name;
-  d.querySelector('.fmeta').textContent=fmtSize(size)+' · just now';
+  d.querySelector('.fmeta').textContent=fmtSize(size)+(path&&path!==name?' · '+path:' · just now');
   const btn=document.createElement('a'); btn.className='btn small primary'; btn.textContent='Save'; btn.href=url; btn.download=name;
   // iOS fallback: open in new tab if download attr ignored
   btn.addEventListener('click', ()=>setTimeout(()=>toast('Saved '+name),300));
   const open=document.createElement('a'); open.className='btn small'; open.textContent='Open'; open.href=url; open.target='_blank'; open.rel='noopener';
   d.append(btn,open);
-  if(isImg){ const img=document.createElement('img'); img.src=url; img.alt=name; img.style.cssText='width:100%;border-radius:8px;margin-top:4px'; img.loading='lazy'; d.querySelector('.grow').appendChild(img); }
+  if(isImg){ const img=document.createElement('img'); img.src=url; img.alt=name; img.style.cssText='width:100%;border-radius:8px;margin-top:4px;cursor:zoom-in'; img.loading='lazy'; img.addEventListener('click',()=>openLightbox(url,name)); d.querySelector('.grow').appendChild(img); }
   recvListEl.prepend(d);
+}
+/* fullscreen image preview */
+function openLightbox(url,name){
+  const dlg=$('#imgDlg'); if(!dlg) return;
+  const full=$('#imgFull'); full.src=url; full.alt=name;
+  const save=$('#imgSave'); if(save){ save.href=url; save.download=name; }
+  if(!dlg.open) dlg.showModal();
 }
 function addRecvText(text, who, outgoingMsg){
   recvEmpty.style.display='none';
@@ -396,6 +464,7 @@ async function connect(){
   msgA = room.makeAction('msg');
   fileA = room.makeAction('file');
   connected = true;
+  pumpQueue(); // resume anything queued while offline
 
   room.onPeerJoin = (id)=>{
     helloA.send(helloMsg(),{target:id}).catch(()=>{});
@@ -410,11 +479,14 @@ async function connect(){
     // reply only once per new peer — otherwise two devices ping-pong hellos forever
     if(isNew) helloA.send(helloMsg(),{target:peerId}).catch(()=>{});
   };
-  msgA.onMessage = (d,{peerId})=>{ const p=peers.get(peerId); addRecvText(String(d.text||''), (p?.name||'Device')+' · received', false); toast('Message received'); };
+  msgA.onMessage = (d,{peerId})=>{ const p=peers.get(peerId); addRecvText(String(d.text||''), (p?.name||'Device')+' · received', false); toast('Message received'); try{ navigator.vibrate && navigator.vibrate(40); }catch{} };
   fileA.onReceiveProgress = (frac,{peerId,metadata})=>{
     const tid = metadata?.transferId; if(!tid) return;
     if(!document.getElementById('t-'+tid)){
-      progressCard(tid, String(metadata?.name||'file'), '', 'down');
+      progressCard(tid, String(metadata?.path||metadata?.name||'file'), '', 'down', ()=>{
+        document.getElementById('t-'+tid)?.remove();
+        delete speedMap[tid];
+      });
       keepAwake(true);
     }
     setProgress(tid, frac, metadata?.size||0);
@@ -425,9 +497,10 @@ async function connect(){
     const transferId = String(metadata?.transferId||rid(8));
     const blob = data instanceof Blob ? data : new Blob([data],{type});
     const url = URL.createObjectURL(blob);
-    addRecvFile(url,name,blob.size,type);
+    addRecvFile(url,name,blob.size,type,String(metadata?.path||''));
     setProgress(transferId,1,blob.size);
     toast('Received '+name);
+    try{ navigator.vibrate && navigator.vibrate([60,40,60]); }catch{}
     if(autoSaveEl.checked){ const a=document.createElement('a'); a.href=url; a.download=name; document.body.appendChild(a); a.click(); a.remove(); }
     keepAwake(false);
   };
@@ -459,6 +532,32 @@ async function reconnect(){
 $('#retryBtn').addEventListener('click', reconnect);
 // Phone sleep / network switch kills signalling: re-announce when back.
 window.addEventListener('online', ()=>{ if(helloA && !peers.size){ helloA.send(helloMsg()).catch(()=>{}); reconnect(); } });
+/* folder picker (webkitdirectory keeps relative paths) */
+const dirInput = $('#dirInput');
+$('#folderBtn').addEventListener('click', ()=>{
+  if(!peers.size){toast('No devices yet — invite one first');return;}
+  if(!('webkitdirectory' in (document.createElement('input')))){ toast('Folder pick not supported here — drag a folder instead'); return; }
+  choosePeer('Send folder to…', (id)=>{ dirInput.dataset.to=id; dirInput.click(); });
+});
+if(dirInput) dirInput.addEventListener('change', ()=>{ handleFiles(filesToEntries(dirInput.files), dirInput.dataset.to||null); dirInput.value=''; });
+/* PWA install prompt */
+let deferredInstall=null;
+const installBtn=$('#installBtn');
+window.addEventListener('beforeinstallprompt',(e)=>{ e.preventDefault(); deferredInstall=e; if(installBtn) installBtn.hidden=false; });
+if(installBtn) installBtn.addEventListener('click', async ()=>{
+  if(!deferredInstall) return;
+  deferredInstall.prompt();
+  try{ await deferredInstall.userChoice; }catch{}
+  deferredInstall=null; installBtn.hidden=true;
+});
+window.addEventListener('appinstalled',()=>{ deferredInstall=null; if(installBtn) installBtn.hidden=true; toast('App installed'); });
+/* lightbox close */
+const imgDlg=$('#imgDlg');
+if(imgDlg){
+  const close=()=>{ try{imgDlg.close();}catch{} $('#imgFull').removeAttribute('src'); };
+  $('#imgClose').addEventListener('click', close);
+  imgDlg.addEventListener('click', (e)=>{ if(e.target===imgDlg) close(); });
+}
 try{
   if('serviceWorker' in navigator){ window.addEventListener('load', ()=>navigator.serviceWorker.register('./sw.js').catch(()=>{})); }
 }catch{}
