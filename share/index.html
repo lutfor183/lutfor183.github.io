@@ -8,6 +8,12 @@
 <meta name="theme-color" content="#2563eb" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#121212" media="(prefers-color-scheme: dark)">
 <link rel="manifest" href="./manifest.webmanifest">
+<link rel="preconnect" href="https://esm.run" crossorigin>
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+<link rel="dns-prefetch" href="//relay.damus.io">
+<link rel="dns-prefetch" href="//nos.lol">
+<link rel="dns-prefetch" href="//relay.primal.net">
+<link rel="dns-prefetch" href="//relay.ditto.pub">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='14' fill='%232563eb'/%3E%3Cpath d='M10 16.5l4 4 8-9' stroke='white' stroke-width='2.6' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
 <style>
 :root{
@@ -35,7 +41,7 @@ a{color:var(--primary)}
 button{font:inherit}
 .wrap{width:100%;max-width:var(--max);margin:0 auto;padding:0 16px}
 header.top{border-bottom:1px solid var(--border);background:color-mix(in srgb,var(--card) 88%,transparent);backdrop-filter:blur(8px);position:sticky;top:0;z-index:20}
-.top-in{display:flex;align-items:center;justify-content:space-between;padding:12px 0;gap:12px}
+.top-in{display:flex;align-items:center;justify-content:space-between;padding:8px 0;gap:12px}
 .brand{display:flex;align-items:center;gap:10px;text-decoration:none;color:var(--text)}
 .brand-mark{width:32px;height:32px;border-radius:50%;background:var(--primary);display:grid;place-items:center;flex:none}
 .brand-mark svg{width:18px;height:18px;stroke:#fff}
@@ -45,8 +51,8 @@ header.top{border-bottom:1px solid var(--border);background:color-mix(in srgb,va
 .icon-btn:hover{border-color:var(--primary)}
 .icon-btn svg{width:20px;height:20px}
 main{flex:1;padding:20px 0 48px}
-.card{background:var(--card);border:1px solid var(--border);border-radius:var(--r-l);box-shadow:var(--shadow);padding:18px}
-.card + .card{margin-top:14px}
+.card{padding:20px 0}
+.card + .card{margin-top:8px;border-top:1px solid var(--border)}
 .eyebrow{font-size:12px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin:0 0 8px}
 h1{font-size:24px;line-height:1.25;letter-spacing:-.01em;margin:0 0 6px}
 p{margin:0 0 10px}
@@ -72,19 +78,22 @@ html[data-theme="dark"] .btn.primary{color:#0b1220}
 #qr canvas,#qr img,#qr table{width:140px!important;height:140px!important}
 .qr-meta{flex:1;min-width:220px;font-size:14px}
 .link-line{font-family:var(--mono);font-size:12.5px;word-break:break-all;background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:8px 10px;margin:8px 0}
-.peers{display:grid;grid-template-columns:repeat(auto-fill,minmax(128px,1fr));gap:12px;margin-top:12px}
-.peer{border:1px solid var(--border);border-radius:14px;background:var(--card);padding:14px 10px;text-align:center;cursor:pointer;min-height:132px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;touch-action:manipulation;transition:transform .15s ease,border-color .15s ease}
-.peer:hover{transform:scale(1.03);border-color:var(--primary)}
-.peer:active{transform:scale(.98)}
-.peer:focus-visible{outline:2px solid var(--primary);outline-offset:2px}
-.peer .avatar{width:56px;height:56px;border-radius:50%;display:grid;place-items:center;color:#fff;font-weight:700;font-size:20px}
-.peer .pname{font-size:14px;font-weight:600;word-break:break-word}
-.peer .psub{font-size:12px;color:var(--muted)}
-.peer.sending{border-color:var(--accent)}
-.peer.dragover{border-color:var(--primary);background:color-mix(in srgb,var(--primary) 8%,var(--card))}
-@keyframes pop{0%{transform:scale(.7);opacity:0}60%{transform:scale(1.08);opacity:1}100%{transform:scale(1)}}
-.peer.enter{animation:pop .5s cubic-bezier(.16,1,.3,1)}
-.empty{border:1.5px dashed var(--border);border-radius:14px;padding:22px;text-align:center;color:var(--muted);font-size:14px;margin-top:12px}
+.peers{display:flex;flex-direction:column;margin-top:12px}
+.peer{border:none;border-bottom:1px solid var(--border);border-radius:0;background:transparent;padding:12px 4px;text-align:left;cursor:pointer;display:flex;flex-direction:row;align-items:center;gap:12px;touch-action:manipulation;transition:background .15s ease;width:100%}
+.peer:hover{background:color-mix(in srgb,var(--primary) 6%,transparent)}
+.peer:active{background:color-mix(in srgb,var(--primary) 10%,transparent)}
+.peer:focus-visible{outline:2px solid var(--primary);outline-offset:-2px}
+.peer .avatar{width:44px;height:44px;border-radius:50%;display:grid;place-items:center;color:#fff;flex:none}
+.peer .avatar svg{width:22px;height:22px}
+.peer .pgrow{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.peer .pname{font-size:15px;font-weight:600;word-break:break-word}
+.peer .psub{font-size:12.5px;color:var(--muted)}
+.peer::after{content:'›';color:var(--muted);font-size:24px;line-height:1;flex:none}
+.peer.sending{background:color-mix(in srgb,var(--accent) 8%,transparent)}
+.peer.dragover{background:color-mix(in srgb,var(--primary) 12%,transparent)}
+@keyframes pop{0%{opacity:0}100%{opacity:1}}
+.peer.enter{animation:pop .3s ease-out}
+.empty{background:transparent;border:none;border-radius:0;padding:26px 8px;text-align:center;color:var(--muted);font-size:14px;margin-top:12px}
 .empty ol{text-align:left;max-width:420px;margin:12px auto 0;padding-left:20px;color:var(--text)}
 /* SHAREit-style discovery radar */
 .radar{position:relative;width:168px;height:168px;margin:6px auto 12px}
@@ -97,16 +106,16 @@ html[data-theme="dark"] .radar .core{color:#0b1220}
 @keyframes ping{0%{transform:scale(.3);opacity:.9}80%{opacity:.25}100%{transform:scale(1);opacity:0}}
 .btn.big{width:100%;min-height:54px;font-size:16px;border-radius:14px}
 .actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}
-.transfers{margin-top:12px;display:flex;flex-direction:column;gap:10px}
-.t{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:10px 12px;font-size:14px}
+.transfers{margin-top:12px;display:flex;flex-direction:column}
+.t{background:transparent;border:none;border-bottom:1px solid var(--border);border-radius:0;padding:10px 4px;font-size:14px}
 .t .t-top{display:flex;justify-content:space-between;gap:10px;align-items:baseline}
 .t .t-name{font-weight:600;word-break:break-all}
 .t .t-meta{color:var(--muted);font-size:12.5px;white-space:nowrap}
 .bar{height:8px;background:color-mix(in srgb,var(--muted) 22%,transparent);border-radius:99px;overflow:hidden;margin-top:8px}
 .bar > i{display:block;height:100%;width:0;background:var(--primary);border-radius:99px;transition:width .25s ease}
 .t.done .bar > i{background:var(--accent)}
-.recv-list{display:flex;flex-direction:column;gap:10px;margin-top:12px}
-.recv{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:10px 12px;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.recv-list{display:flex;flex-direction:column;margin-top:12px}
+.recv{background:transparent;border:none;border-bottom:1px solid var(--border);border-radius:0;padding:12px 4px;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
 .recv .file-ic{width:38px;height:38px;border-radius:10px;background:var(--primary);color:#fff;display:grid;place-items:center;flex:none}
 html[data-theme="dark"] .recv .file-ic{color:#0b1220}
 .recv .file-ic svg{width:19px;height:19px}
@@ -132,7 +141,7 @@ footer .wrap{display:flex;gap:8px;flex-wrap:wrap;align-items:center;justify-cont
 .switch input{width:18px;height:18px;accent-color:var(--primary)}
 @media (max-width:560px){
   h1{font-size:21px}
-  .card{padding:15px}
+  .card{padding:16px 0}
   .qr-zone{gap:12px}
   #qr{width:132px;height:132px}
   #qr canvas,#qr img,#qr table{width:124px!important;height:124px!important}
@@ -149,6 +158,7 @@ footer .wrap{display:flex;gap:8px;flex-wrap:wrap;align-items:center;justify-cont
       <span><b>Drop</b><small>Private P2P file sharing</small></span>
     </a>
     <div class="row" style="gap:8px">
+      <button class="icon-btn" id="installBtn" type="button" aria-label="Install app" title="Install app" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11"/><path d="M7 11l5 5 5-5"/><path d="M4 20h16"/></svg></button>
       <a class="icon-btn" href="./scan.html" aria-label="Scan QR to join" title="Scan QR to join"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><path d="M14 14h3v3h-3zM20 14h1M14 20h1M18 18h3v3h-3z"/></svg></a>
       <button class="icon-btn" id="themeBtn" type="button" aria-label="Toggle dark mode" title="Toggle dark mode"><svg id="themeIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 3a9 9 0 1 0 9 9 7 7 0 0 1-9-9z"/></svg></button>
     </div>
@@ -168,17 +178,19 @@ footer .wrap{display:flex;gap:8px;flex-wrap:wrap;align-items:center;justify-cont
         <span class="core"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="2.5" width="10" height="19" rx="2.5"/><path d="M11 18.5h2"/></svg></span>
       </div>
       <strong style="color:var(--text)">Searching for nearby devices…</strong>
-      <ol>
-        <li>Keep this page open.</li>
-        <li>Open the invite link below on the other device.</li>
-      </ol>
+      <p style="margin:8px 0 0">Open the invite link below on the other device.</p>
     </div>
     <div class="actions">
       <button class="btn primary big" id="sendFilesBtn" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4"/><path d="M7 9l5-5 5 5"/><path d="M4 20h16"/></svg>Send files</button>
+    </div>
+    <div class="actions" style="margin-top:10px">
       <button class="btn" id="sendTextBtn" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a8 8 0 0 1-8 8H4l2-3a8 8 0 1 1 15-5z"/></svg>Send text</button>
+      <button class="btn" id="folderBtn" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>Folder</button>
+      <button class="btn" id="clipBtn" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>Clipboard</button>
       <label class="switch" style="margin-left:auto"><input type="checkbox" id="autoSave" checked>Auto-save</label>
     </div>
     <input type="file" id="fileInput" multiple hidden>
+    <input type="file" id="dirInput" hidden webkitdirectory>
     <div class="transfers" id="transfers" aria-live="polite"></div>
     <div class="row" style="margin-top:10px">
       <button class="btn small" id="retryBtn" type="button">Retry</button>
@@ -242,8 +254,16 @@ footer .wrap{display:flex;gap:8px;flex-wrap:wrap;align-items:center;justify-cont
   <div class="dlg-actions"><button class="btn" id="peerDlgClose" type="button">Cancel</button></div>
 </dialog>
 
+<dialog id="imgDlg" aria-label="Image preview">
+  <img id="imgFull" alt="Received image" style="width:100%;border-radius:12px;display:block">
+  <div class="dlg-actions">
+    <a class="btn small primary" id="imgSave">Save</a>
+    <button class="btn" id="imgClose" type="button">Close</button>
+  </div>
+</dialog>
+
 <div id="toast" role="status" aria-live="polite"></div>
-<footer><div class="wrap"><span>Drop · direct device-to-device sharing over WebRTC. No accounts, no uploads.</span><a href="../">Back to home</a></div></footer>
+<footer><div class="wrap"><span>Drop · P2P, no uploads.</span><a href="../">Home</a></div></footer>
 <script type="module" src="./app.js"></script>
 </body>
 </html>
