@@ -1,0 +1,249 @@
+<!doctype html>
+<html lang="en" data-theme="auto">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Drop — Private P2P file sharing</title>
+<meta name="description" content="Send files and text directly between devices. No upload, no account. Peer-to-peer over WebRTC.">
+<meta name="theme-color" content="#2563eb" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#121212" media="(prefers-color-scheme: dark)">
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='14' fill='%232563eb'/%3E%3Cpath d='M10 16.5l4 4 8-9' stroke='white' stroke-width='2.6' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<style>
+:root{
+  --bg:#fafafa; --bg2:#f1f3f4; --card:#ffffff; --text:#1a1a1a; --muted:#6b7280;
+  --primary:#2563eb; --primary-h:#1d4ed8; --accent:#059669; --danger:#dc2626;
+  --border:#e5e7eb; --shadow:none;
+  --r-s:6px; --r-m:10px; --r-l:14px; --max:680px;
+  --font:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  --mono:ui-monospace,"Cascadia Code","Source Code Pro",Menlo,Consolas,monospace;
+}
+html[data-theme="dark"]{
+  --bg:#121212; --bg2:#1e1e1e; --card:#1c1c1c; --text:#e8e8e8; --muted:#9ca3af;
+  --primary:#60a5fa; --primary-h:#93bbfd; --accent:#34d399; --danger:#f87171;
+  --border:#2e2e2e; --shadow:0 1px 2px rgba(0,0,0,.4),0 4px 16px rgba(0,0,0,.4);
+}
+@media (prefers-color-scheme:dark){ html[data-theme="auto"]{
+  --bg:#121212; --bg2:#1e1e1e; --card:#1c1c1c; --text:#e8e8e8; --muted:#9ca3af;
+  --primary:#60a5fa; --primary-h:#93bbfd; --accent:#34d399; --danger:#f87171;
+  --border:#2e2e2e; --shadow:0 1px 2px rgba(0,0,0,.4),0 4px 16px rgba(0,0,0,.4);
+}}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font);line-height:1.5;transition:background-color .4s ease,color .4s ease;min-height:100dvh;display:flex;flex-direction:column}
+a{color:var(--primary)}
+button{font:inherit}
+.wrap{width:100%;max-width:var(--max);margin:0 auto;padding:0 16px}
+header.top{border-bottom:1px solid var(--border);background:color-mix(in srgb,var(--card) 88%,transparent);backdrop-filter:blur(8px);position:sticky;top:0;z-index:20}
+.top-in{display:flex;align-items:center;justify-content:space-between;padding:12px 0;gap:12px}
+.brand{display:flex;align-items:center;gap:10px;text-decoration:none;color:var(--text)}
+.brand-mark{width:32px;height:32px;border-radius:50%;background:var(--primary);display:grid;place-items:center;flex:none}
+.brand-mark svg{width:18px;height:18px;stroke:#fff}
+.brand b{font-size:17px;letter-spacing:-.01em}
+.brand small{display:block;font-size:12px;color:var(--muted);font-weight:400}
+.icon-btn{width:40px;height:40px;border-radius:10px;border:1px solid var(--border);background:var(--card);color:var(--text);display:inline-grid;place-items:center;cursor:pointer;touch-action:manipulation}
+.icon-btn:hover{border-color:var(--primary)}
+.icon-btn svg{width:20px;height:20px}
+main{flex:1;padding:20px 0 48px}
+.card{background:var(--card);border:1px solid var(--border);border-radius:var(--r-l);box-shadow:var(--shadow);padding:18px}
+.card + .card{margin-top:14px}
+.eyebrow{font-size:12px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin:0 0 8px}
+h1{font-size:24px;line-height:1.25;letter-spacing:-.01em;margin:0 0 6px}
+p{margin:0 0 10px}
+.muted{color:var(--muted)}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.device-line{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.dot{width:10px;height:10px;border-radius:50%;background:var(--accent);display:inline-block;margin-right:8px;box-shadow:0 0 0 4px color-mix(in srgb,var(--accent) 18%,transparent)}
+.dot.waiting{background:#d97706;box-shadow:0 0 0 4px rgba(217,119,6,.15)}
+.code-box{display:flex;align-items:center;gap:10px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-m);padding:8px 10px;margin-top:12px;flex-wrap:wrap}
+.code{font-family:var(--mono);font-size:15px;font-weight:600;letter-spacing:.14em}
+.join-row{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
+.join-row input{flex:1;min-width:140px;border:1px solid var(--border);border-radius:10px;padding:10px 12px;font:inherit;font-family:var(--mono);letter-spacing:.14em;text-transform:lowercase;background:var(--bg);color:var(--text);min-height:44px}
+.btn{appearance:none;border:1px solid var(--border);background:var(--card);color:var(--text);border-radius:10px;padding:9px 13px;min-height:42px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:8px;font-weight:600;font-size:14px;touch-action:manipulation;text-decoration:none}
+.btn:hover{border-color:var(--primary)}
+.btn.primary{background:var(--primary);border-color:var(--primary);color:#fff}
+html[data-theme="dark"] .btn.primary{color:#0b1220}
+@media (prefers-color-scheme:dark){html[data-theme="auto"] .btn.primary{color:#0b1220}}
+.btn.primary:hover{background:var(--primary-h)}
+.btn.small{min-height:36px;padding:7px 10px;font-size:13px;border-radius:8px}
+.btn svg{width:17px;height:17px}
+.qr-zone{display:flex;gap:16px;margin-top:14px;flex-wrap:wrap;align-items:center;justify-content:center;text-align:center}
+#qr{width:148px;height:148px;border:1px solid var(--border);border-radius:12px;background:#fff;display:grid;place-items:center;overflow:hidden;flex:none;margin:0 auto}
+#qr canvas,#qr img,#qr table{width:140px!important;height:140px!important}
+.qr-meta{flex:1;min-width:220px;font-size:14px}
+.link-line{font-family:var(--mono);font-size:12.5px;word-break:break-all;background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:8px 10px;margin:8px 0}
+.peers{display:grid;grid-template-columns:repeat(auto-fill,minmax(128px,1fr));gap:12px;margin-top:12px}
+.peer{border:1px solid var(--border);border-radius:14px;background:var(--card);padding:14px 10px;text-align:center;cursor:pointer;min-height:132px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;touch-action:manipulation;transition:transform .15s ease,border-color .15s ease}
+.peer:hover{transform:scale(1.03);border-color:var(--primary)}
+.peer:active{transform:scale(.98)}
+.peer:focus-visible{outline:2px solid var(--primary);outline-offset:2px}
+.peer .avatar{width:56px;height:56px;border-radius:50%;display:grid;place-items:center;color:#fff;font-weight:700;font-size:20px}
+.peer .pname{font-size:14px;font-weight:600;word-break:break-word}
+.peer .psub{font-size:12px;color:var(--muted)}
+.peer.sending{border-color:var(--accent)}
+.peer.dragover{border-color:var(--primary);background:color-mix(in srgb,var(--primary) 8%,var(--card))}
+@keyframes pop{0%{transform:scale(.7);opacity:0}60%{transform:scale(1.08);opacity:1}100%{transform:scale(1)}}
+.peer.enter{animation:pop .5s cubic-bezier(.16,1,.3,1)}
+.empty{border:1.5px dashed var(--border);border-radius:14px;padding:22px;text-align:center;color:var(--muted);font-size:14px;margin-top:12px}
+.empty ol{text-align:left;max-width:420px;margin:12px auto 0;padding-left:20px;color:var(--text)}
+/* SHAREit-style discovery radar */
+.radar{position:relative;width:168px;height:168px;margin:6px auto 12px}
+.radar .ring{position:absolute;inset:0;border-radius:50%;border:2px solid var(--primary);opacity:0;animation:ping 2.4s ease-out infinite}
+.radar .ring:nth-child(2){animation-delay:.8s}
+.radar .ring:nth-child(3){animation-delay:1.6s}
+.radar .core{position:absolute;inset:56px;border-radius:50%;background:var(--primary);display:grid;place-items:center;color:#fff;box-shadow:0 4px 14px color-mix(in srgb,var(--primary) 45%,transparent)}
+html[data-theme="dark"] .radar .core{color:#0b1220}
+.radar .core svg{width:28px;height:28px}
+@keyframes ping{0%{transform:scale(.3);opacity:.9}80%{opacity:.25}100%{transform:scale(1);opacity:0}}
+.btn.big{width:100%;min-height:54px;font-size:16px;border-radius:14px}
+.actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}
+.transfers{margin-top:12px;display:flex;flex-direction:column;gap:10px}
+.t{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:10px 12px;font-size:14px}
+.t .t-top{display:flex;justify-content:space-between;gap:10px;align-items:baseline}
+.t .t-name{font-weight:600;word-break:break-all}
+.t .t-meta{color:var(--muted);font-size:12.5px;white-space:nowrap}
+.bar{height:8px;background:color-mix(in srgb,var(--muted) 22%,transparent);border-radius:99px;overflow:hidden;margin-top:8px}
+.bar > i{display:block;height:100%;width:0;background:var(--primary);border-radius:99px;transition:width .25s ease}
+.t.done .bar > i{background:var(--accent)}
+.recv-list{display:flex;flex-direction:column;gap:10px;margin-top:12px}
+.recv{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:10px 12px;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.recv .file-ic{width:38px;height:38px;border-radius:10px;background:var(--primary);color:#fff;display:grid;place-items:center;flex:none}
+html[data-theme="dark"] .recv .file-ic{color:#0b1220}
+.recv .file-ic svg{width:19px;height:19px}
+.recv .grow{flex:1;min-width:180px}
+.recv .fname{font-weight:600;font-size:14px;word-break:break-all}
+.recv .fmeta{font-size:12.5px;color:var(--muted)}
+dialog{border:1px solid var(--border);border-radius:16px;background:var(--card);color:var(--text);padding:20px;width:min(480px,calc(100vw - 32px));box-shadow:var(--shadow)}
+dialog::backdrop{background:rgba(0,0,0,.45)}
+dialog h2{margin:0 0 8px;font-size:18px}
+textarea{width:100%;min-height:110px;border:1px solid var(--border);border-radius:10px;padding:10px;background:var(--bg);color:var(--text);font:inherit;resize:vertical}
+.dlg-actions{display:flex;gap:10px;justify-content:flex-end;margin-top:12px}
+#toast{position:fixed;left:50%;bottom:calc(18px + env(safe-area-inset-bottom));transform:translateX(-50%) translateY(20px);background:#1f2937;color:#fff;border-radius:12px;padding:11px 16px;font-size:14px;opacity:0;pointer-events:none;transition:opacity .25s ease,transform .25s ease;z-index:60;max-width:min(520px,calc(100vw - 32px));text-align:center}
+html[data-theme="dark"] #toast{background:#e8e8e8;color:#111}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+footer{border-top:1px solid var(--border);padding:18px 0 calc(18px + env(safe-area-inset-bottom));color:var(--muted);font-size:13px}
+footer .wrap{display:flex;gap:8px;flex-wrap:wrap;align-items:center;justify-content:space-between}
+.skip{position:absolute;left:-999px;top:0;background:var(--primary);color:#fff;padding:8px 12px;border-radius:8px}
+.skip:focus{left:8px;top:8px;z-index:99}
+:focus-visible{outline:2px solid var(--primary);outline-offset:2px}
+.howto{display:grid;gap:10px;margin-top:10px;font-size:14px}
+.howto li{margin-bottom:2px}
+.switch{display:inline-flex;align-items:center;gap:8px;font-size:13.5px;color:var(--muted);cursor:pointer;user-select:none}
+.switch input{width:18px;height:18px;accent-color:var(--primary)}
+@media (max-width:560px){
+  h1{font-size:21px}
+  .card{padding:15px}
+  .qr-zone{gap:12px}
+  #qr{width:132px;height:132px}
+  #qr canvas,#qr img,#qr table{width:124px!important;height:124px!important}
+}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<a class="skip" href="#main">Skip to sharing</a>
+<header class="top">
+  <div class="wrap top-in">
+    <a class="brand" href="./" aria-label="Drop home">
+      <span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v13"/><path d="M7 11l5 5 5-5"/><path d="M4 21h16"/></svg></span>
+      <span><b>Drop</b><small>Private P2P file sharing</small></span>
+    </a>
+    <div class="row" style="gap:8px">
+      <a class="icon-btn" href="./scan.html" aria-label="Scan QR to join" title="Scan QR to join"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><path d="M14 14h3v3h-3zM20 14h1M14 20h1M18 18h3v3h-3z"/></svg></a>
+      <button class="icon-btn" id="themeBtn" type="button" aria-label="Toggle dark mode" title="Toggle dark mode"><svg id="themeIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 3a9 9 0 1 0 9 9 7 7 0 0 1-9-9z"/></svg></button>
+    </div>
+  </div>
+</header>
+<main id="main" class="wrap" tabindex="-1">
+  <section class="card" aria-labelledby="peersH">
+    <div class="device-line">
+      <div><h1 id="peersH" style="margin:0;font-size:20px">Nearby devices</h1>
+      <p class="muted" style="margin:6px 0 0"><span class="dot" id="statusDot" aria-hidden="true"></span><span id="statusText" role="status">Starting…</span><br>
+      <span style="font-size:14px">This device: <strong id="myName">…</strong></span></p></div>
+    </div>
+    <div class="peers" id="peers" role="list" aria-live="polite"></div>
+    <div class="empty" id="emptyState">
+      <div class="radar" aria-hidden="true">
+        <span class="ring"></span><span class="ring"></span><span class="ring"></span>
+        <span class="core"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="2.5" width="10" height="19" rx="2.5"/><path d="M11 18.5h2"/></svg></span>
+      </div>
+      <strong style="color:var(--text)">Searching for nearby devices…</strong>
+      <ol>
+        <li>Keep this page open.</li>
+        <li>Open the invite link below on the other device.</li>
+      </ol>
+    </div>
+    <div class="actions">
+      <button class="btn primary big" id="sendFilesBtn" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4"/><path d="M7 9l5-5 5 5"/><path d="M4 20h16"/></svg>Send files</button>
+      <button class="btn" id="sendTextBtn" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a8 8 0 0 1-8 8H4l2-3a8 8 0 1 1 15-5z"/></svg>Send text</button>
+      <label class="switch" style="margin-left:auto"><input type="checkbox" id="autoSave" checked>Auto-save</label>
+    </div>
+    <input type="file" id="fileInput" multiple hidden>
+    <div class="transfers" id="transfers" aria-live="polite"></div>
+    <div class="row" style="margin-top:10px">
+      <button class="btn small" id="retryBtn" type="button">Retry</button>
+      <span class="muted" style="font-size:13px" id="netInfo"></span>
+    </div>
+  </section>
+
+  <section class="card" aria-labelledby="recvH">
+    <p class="eyebrow">Received</p>
+    <h2 id="recvH" style="margin:0;font-size:18px">Incoming</h2>
+    <div class="recv-list" id="recvList"></div>
+    <p class="muted" id="recvEmpty" style="font-size:14px;margin:10px 0 0">Nothing received yet.</p>
+  </section>
+
+  <section class="card">
+    <p class="eyebrow">Your room</p>
+    <div class="code-box" aria-label="Room code">
+      <span class="muted" style="font-size:13px">room</span>
+      <span class="code" id="roomCode">···</span>
+      <span class="row" style="gap:8px;margin-left:auto">
+        <button class="btn small" id="copyCodeBtn" type="button">Copy</button>
+        <button class="btn small" id="newRoomBtn" type="button">New</button>
+      </span>
+    </div>
+    <form class="join-row" id="joinForm">
+      <input id="joinInput" maxlength="3" autocomplete="off" spellcheck="false" placeholder="type code, e.g. abc" aria-label="Join with room code" style="text-transform:lowercase">
+      <button class="btn small primary" type="submit">Join</button>
+    </form>
+    <div class="qr-zone">
+      <div id="qr" role="img" aria-label="QR code for this room"></div>
+      <div class="qr-meta">
+        <p style="margin:0 0 6px"><strong>Invite another device</strong></p>
+        <p class="muted" style="font-size:13.5px">Same code on both devices, or scan.</p>
+        <div class="link-line" id="roomLink">…</div>
+        <div class="row" style="gap:8px">
+          <button class="btn small primary" id="copyLinkBtn" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>Copy invite link</button>
+          <a class="btn small" href="./scan.html">Scan instead</a>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<dialog id="textDlg" aria-labelledby="textDlgH">
+  <h2 id="textDlgH">Send text</h2>
+  <p class="muted" style="font-size:14px">Send to <strong id="textTo">…</strong></p>
+  <form method="dialog" id="textForm">
+    <label for="textInput" class="muted" style="font-size:13px">Message or link</label>
+    <textarea id="textInput" placeholder="Type a message or paste a link…" autocomplete="off"></textarea>
+    <div class="dlg-actions">
+      <button class="btn" value="cancel" formnovalidate type="submit">Cancel</button>
+      <button class="btn primary" id="textSend" value="send" type="submit">Send</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="peerDlg" aria-labelledby="peerDlgH">
+  <h2 id="peerDlgH">Choose device</h2>
+  <p class="muted" style="font-size:14px">Multiple devices nearby. Where should this go?</p>
+  <div class="row" id="peerPick" style="gap:8px"></div>
+  <div class="dlg-actions"><button class="btn" id="peerDlgClose" type="button">Cancel</button></div>
+</dialog>
+
+<div id="toast" role="status" aria-live="polite"></div>
+<footer><div class="wrap"><span>Drop · direct device-to-device sharing over WebRTC. No accounts, no uploads.</span><a href="../">Back to home</a></div></footer>
+<script type="module" src="./app.js"></script>
+</body>
+</html>
