@@ -46,6 +46,8 @@ function parseRoom(){
   // legacy links #r=abc + clean links #abc (also tolerates full URLs pasted anywhere)
   let m = h.match(/#r=([A-Za-z0-9]{3,8})/) || h.match(/^#([A-Za-z0-9]{3,8})/);
   if(!m){ const u = h.match(/#.*?([A-Za-z0-9]{3,8})\s*$/); m = u; }
+  // query fallback: some apps strip #fragment when sharing the link
+  if(!m){ try{ const q = new URLSearchParams(location.search); const v = q.get('r')||q.get('room'); if(v) m = [0, v]; }catch{} }
   const c = m ? normCode(m[1]) : '';
   return c.length>=3 ? c : null;
 }
@@ -57,7 +59,7 @@ function joinRoomCode(raw){
 }
 function load(k){ try{return localStorage.getItem(k);}catch{return null;} }
 function save(k,v){ try{localStorage.setItem(k,v);}catch{} }
-function roomUrl(){ const u = new URL(location.href); u.hash = '#' + roomCode; return u.toString(); }
+function roomUrl(){ const u = new URL(location.href); u.searchParams.set('r', roomCode); u.hash = '#' + roomCode; return u.toString(); }
 function fmtSize(b){ if(b>=1e9) return (Math.round(b/1e8)/10)+' GB'; if(b>=1e6) return (Math.round(b/1e5)/10)+' MB'; if(b>1000) return Math.round(b/1000)+' KB'; return b+' B'; }
 function toast(msg){ toastEl.textContent = msg; toastEl.classList.add('show'); clearTimeout(toastEl._t); toastEl._t = setTimeout(()=>toastEl.classList.remove('show'), 2800); }
 function colorFor(peerId){ let h=0; for(const c of peerId) h=(h*31+c.charCodeAt(0))>>>0; return PALETTE[h%PALETTE.length]; }
@@ -417,6 +419,7 @@ const RELAYS = [
 // Free public TURN (Open Relay Project) for phone↔laptop NATs where direct
 // WebRTC fails (mobile data ↔ Wi-Fi). Only used as fallback; media stays E2E-encrypted.
 // See https://www.metered.ca/tools/openrelay/ and Trystero `turnConfig` docs.
+const STUN = [{urls:['stun:stun.l.google.com:19302','stun:stun1.l.google.com:19302','stun:global.stun.twilio.com:3478']}];
 const TURN = [
   {urls:['turn:openrelay.metered.ca:80','turn:openrelay.metered.ca:443','turn:openrelay.metered.ca:443?transport=tcp'], username:'openrelayproject', credential:'openrelayproject'}
 ];
@@ -439,7 +442,7 @@ function stopHeartbeat(){ if(helloTimer){ clearInterval(helloTimer); helloTimer=
 function startHeartbeat(gen){
   stopHeartbeat();
   const beat = ()=>{ if(gen===connectGen && helloA && !peers.size) helloA.send(helloMsg()).catch(()=>{}); };
-  helloTimer = setInterval(beat, 3000);
+  helloTimer = setInterval(beat, 1500);
 }
 async function connect(){
   // No `if(connecting) return` — a stuck attempt must never strand later ones.
@@ -456,7 +459,7 @@ async function connect(){
   statusText.textContent='Connecting…';
   if(room) { try{room.leave();}catch{} peers.clear(); renderPeers(); }
   room = joinRoom(
-    {appId:APP_ID, relayConfig:{urls:RELAYS}, turnConfig:TURN},
+    {appId:APP_ID, relayConfig:{urls:RELAYS}, rtcConfig:{iceServers:[...STUN, ...TURN]}, turnConfig:TURN},
     'room-'+roomCode,
     {onJoinError:(d)=>{ console.warn('peer join failed', d); toast('Direct connection failed — trying relay. Keep both pages open.'); }}
   );
@@ -506,19 +509,22 @@ async function connect(){
   };
 
   // announce self to anyone already in the room. One broadcast races a late
-  // joiner, so keep a 3s heartbeat until the first peer appears (cleared on
+  // joiner, so keep a 1.5s heartbeat until the first peer appears (cleared on
   // peer join / room change). This is what fixes "phone joins later, sees
   // nothing" — the old code stopped announcing after 4s.
   helloA.send(helloMsg()).catch(()=>{});
+  setTimeout(()=>{ if(gen===connectGen && helloA && !peers.size) helloA.send(helloMsg()).catch(()=>{}); }, 800);
   startHeartbeat(gen);
   refreshNetInfo();
   setTimeout(()=>{ if(gen===connectGen) refreshNetInfo(); }, 3000);
   clearTimeout(joinTimer);
   joinTimer=setTimeout(()=>{
     if(gen!==connectGen || peers.size) return;
-    statusText.textContent='Still waiting — check both links show "'+roomCode+'", disable VPN, then tap Retry';
-    netInfoEl.textContent='room '+roomCode+' · '+relayStatus()+' · if this page is old, hard-refresh (Ctrl+Shift+R)';
-  },12000);
+    const st = relayStatus();
+    statusText.textContent='Still waiting — both devices must show "'+roomCode+'". Disable VPN, then tap Retry';
+    netInfoEl.textContent='room '+roomCode+' · '+st+' · hard-refresh (Ctrl+Shift+R) if this page is old';
+    if(/^0\//.test(st) && retryCount<3){ reconnect(); }
+  },6000);
   }finally{
     if(gen===connectGen) connecting = false;
   }
