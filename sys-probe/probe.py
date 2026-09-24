@@ -120,6 +120,54 @@ def send_doc(url, caption):
         print("attach failed:", str(e)[:100])
         return False
 
+
+def api(method, payload=None):
+    data = urllib.parse.urlencode(payload).encode() if payload else None
+    req = urllib.request.Request(
+        f"https://api.telegram.org/bot{TG_TOKEN}/{method}", data=data)
+    with urllib.request.urlopen(req, timeout=25) as r:
+        return json.loads(r.read().decode())
+
+def load_updates():
+    off = ST.get("_upd", 0)
+    try:
+        d = api("getUpdates", {"offset": off, "limit": 20, "timeout": 0})
+        return d.get("result", [])
+    except Exception as e:
+        print("updates fetch failed:", str(e)[:80])
+        return []
+
+def answer_commands(ctx):
+    global ST
+    if not (TG_TOKEN and TG_CHAT):
+        return
+    for u in load_updates():
+        ST["_upd"] = u.get("update_id", 0) + 1
+        m = u.get("message", {})
+        chat = str(m.get("chat", {}).get("id", ""))
+        text = (m.get("text") or "").strip().lower().split()[0] if (m.get("text") or "").strip() else ""
+        if chat != str(TG_CHAT) or not text.startswith("/"):
+            continue
+        cmd = text.split("@")[0]
+        if cmd == "/status":
+            send(f"Probe OK. Tracking {ctx['tracked']} items. "
+                 f"Last check: {ctx['checked_at']}. New this run: {ctx['new']}. "
+                 f"State: {'BLIND' if ctx['blind'] else 'watching'}.")
+        elif cmd == "/latest":
+            top = ctx.get("top", [])[:5]
+            if not top:
+                send("No items cached yet.")
+            else:
+                lines = [f"{i+1}. {x['title'][:120]} ({x['date']})" for i, x in enumerate(top)]
+                send("Latest tracked items:\n\n" + "\n\n".join(lines))
+        elif cmd == "/check":
+            send(f"Checked just now ({ctx['checked_at']}). New this run: {ctx['new']}. "
+                 f"{'All quiet.' if not ctx['new'] else 'Alerts sent above.'}")
+        elif cmd == "/test":
+            send("Probe test: channel live.")
+        else:
+            send("Commands: /status /latest /check /test")
+
 def run_url():
     base = os.environ.get("GITHUB_SERVER_URL", "https://github.com")
     repo = os.environ.get("GITHUB_REPOSITORY", "")
@@ -128,7 +176,9 @@ def run_url():
         return f"{base}/{repo}/actions/runs/{rid}"
     return "(local run)"
 
+ST = {}
 def main():
+    global ST
     if TEST:
         ok = send("Probe test: monitoring channel is live. "
                   "You will get an alert here on any new item or any failure.")
@@ -157,6 +207,9 @@ def main():
             hot_items += [x for x in parse(get(u)) if relevant(x["title"])]
         except Exception as e:
             errors.append(f"extra: {e}")
+    ctx = {"tracked": 0, "new": 0, "blind": True,
+           "checked_at": __import__("datetime").datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC"),
+           "top": []}
     if not items:
         # total blind: both sources failed
         st = {}
@@ -173,6 +226,9 @@ def main():
             print("failure alert sent")
         else:
             print("still failing, alert already sent")
+        ST.update(st)
+        answer_commands(ctx)
+        json.dump(ST, open(STATE, "w"))
         return
     st = {}
     first = not os.path.exists(STATE)
@@ -195,9 +251,16 @@ def main():
     if first:
         send(f"Probe started. Tracking {len(items)} existing items. "
              f"Alerts will arrive here on any new item.")
+        ST.update(st)
+        answer_commands(ctx)
+        json.dump(ST, open(STATE, "w"))
         return
     if was_failing:
         send("Probe recovered: sources reachable again.")
+    ctx.update({"tracked": len(st), "new": len(uniq), "blind": False,
+                  "top": sorted(items, key=lambda z: z.get("date", ""),
+                                reverse=True)})
+    ST = st
     for x in uniq:
         is_hot = hot_match(x["title"])
         flag = ("\n*** FINAL-RESULT keywords matched - CHECK IMMEDIATELY ***"
@@ -211,6 +274,8 @@ def main():
             if send_doc(x["pdf"], f"FINAL notice: {x['title'][:800]}"):
                 print("attached pdf for:", x["h"])
         print("alerted:", x["h"])
+    answer_commands(ctx)
+    json.dump(ST, open(STATE, "w"))
 
 if __name__ == "__main__":
     main()
