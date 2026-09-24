@@ -87,6 +87,39 @@ def send(text):
     with urllib.request.urlopen(req, timeout=20) as r:
         return r.status == 200
 
+
+def relevant(title):
+    n = norm(title)
+    return ("50" in n or "2025" in n) and hot_match(title)
+
+def send_doc(url, caption):
+    if not (TG_TOKEN and TG_CHAT):
+        if os.environ.get("PROBE_VERBOSE") == "1":
+            print("[DRY-RUN] would attach: " + url[:80])
+        else:
+            print("[DRY-RUN] attachment suppressed")
+        return False
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(req, timeout=60) as r:
+            blob = r.read()
+        if len(blob) > 45 * 1024 * 1024 or len(blob) < 1000:
+            return False
+        bnd = "----probe" + os.urandom(8).hex()
+        cap = caption[:900]
+        body = (f"--{bnd}\r\nContent-Disposition: form-data; name=\"chat_id\"\r\n\r\n{TG_CHAT}\r\n"
+                f"--{bnd}\r\nContent-Disposition: form-data; name=\"caption\"\r\n\r\n{cap}\r\n"
+                f"--{bnd}\r\nContent-Disposition: form-data; name=\"document\"; filename=\"notice.pdf\"\r\n"
+                f"Content-Type: application/pdf\r\n\r\n").encode() + blob + f"\r\n--{bnd}--\r\n".encode()
+        req2 = urllib.request.Request(
+            f"https://api.telegram.org/bot{TG_TOKEN}/sendDocument", data=body,
+            headers={"Content-Type": f"multipart/form-data; boundary={bnd}"})
+        with urllib.request.urlopen(req2, timeout=120) as r2:
+            return r2.status == 200
+    except Exception as e:
+        print("attach failed:", str(e)[:100])
+        return False
+
 def run_url():
     base = os.environ.get("GITHUB_SERVER_URL", "https://github.com")
     repo = os.environ.get("GITHUB_REPOSITORY", "")
@@ -106,6 +139,7 @@ def main():
         CFG = decrypt_targets()
         HOT = CFG.get("hot", [])
         urls = [CFG["base"] + u for u in CFG["urls"]]
+        hurls = [CFG["base"] + u for u in CFG.get("hot_urls", [])]
     except Exception as e:
         print("FATAL: cannot unlock target list:", e)
         send(f"PROBE FAILURE: cannot unlock target list ({e}). "
@@ -117,6 +151,12 @@ def main():
             items += parse(get(u))
         except Exception as e:
             errors.append(f"{e}")
+    hot_items = []
+    for u in hurls:
+        try:
+            hot_items += [x for x in parse(get(u)) if relevant(x["title"])]
+        except Exception as e:
+            errors.append(f"extra: {e}")
     if not items:
         # total blind: both sources failed
         st = {}
@@ -146,10 +186,12 @@ def main():
     seen_ids = set(st)
     uniq = [x for x in new if x["h"] not in seen_ids
             and not seen_ids.add(x["h"])]
-    for x in items:
+    for x in items + hot_items:
         st[x["h"]] = x["date"]
     json.dump(st, open(STATE, "w"))
-    print(f"total={len(items)} new={len(uniq)}")
+    hnew = [x for x in hot_items if x["h"] not in seen_ids]
+    print(f"total={len(items)} new={len(uniq)} hot_extra={len(hnew)}")
+    uniq += [x for x in hnew if x not in uniq]
     if first:
         send(f"Probe started. Tracking {len(items)} existing items. "
              f"Alerts will arrive here on any new item.")
@@ -157,13 +199,17 @@ def main():
     if was_failing:
         send("Probe recovered: sources reachable again.")
     for x in uniq:
+        is_hot = hot_match(x["title"])
         flag = ("\n*** FINAL-RESULT keywords matched - CHECK IMMEDIATELY ***"
-                if hot_match(x["title"]) else "")
+                if is_hot else "")
         msg = (f"NEW ITEM ALERT{flag}\n\nTitle: {x['title']}\n"
                f"Published: {x['date']}\nDetails: {x['link']}")
         if x["pdf"]:
             msg += f"\nPDF: {x['pdf']}"
         send(msg)
+        if is_hot and x["pdf"]:
+            if send_doc(x["pdf"], f"FINAL notice: {x['title'][:800]}"):
+                print("attached pdf for:", x["h"])
         print("alerted:", x["h"])
 
 if __name__ == "__main__":
