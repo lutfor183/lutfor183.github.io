@@ -257,7 +257,7 @@ def main():
         return
     if was_failing:
         send("Probe recovered: sources reachable again.")
-    ctx.update({"tracked": len(st), "new": len(uniq), "blind": False,
+    ctx.update({"tracked": len([k for k in st if not k.startswith("_")]), "new": len(uniq), "blind": False,
                   "top": sorted(items, key=lambda z: z.get("date", ""),
                                 reverse=True)})
     ST = st
