@@ -158,7 +158,7 @@ def main():
     json.dump(out, open(OUT, "w", encoding="utf-8"), ensure_ascii=False)
     print(f"wrote {OUT} ({len(posts)} posts)")
     try:
-        encrypt_file(OUT, ENC, os.environ.get("JC_PASS", "8880"))
+        encrypt_file(OUT, ENC, os.environ.get("JC_PASS") or "8880")
     except Exception as e:
         print("encryption skipped (need pycryptodome):", e)
     for p in posts[:5]:
