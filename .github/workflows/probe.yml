@@ -2,6 +2,8 @@ name: service probe
 on:
   schedule:
     - cron: "*/5 * * * *"
+  repository_dispatch:
+    types: [probe]
   workflow_dispatch:
     inputs:
       test:
